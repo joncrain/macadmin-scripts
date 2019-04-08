@@ -23,7 +23,7 @@ A tool to download the parts for an Install macOS app from Apple's
 softwareupdate servers and install a functioning Install macOS app onto an
 empty disk image'''
 
-
+from nibbler import *
 import argparse
 import gzip
 import os
@@ -32,9 +32,22 @@ import subprocess
 import sys
 import urlparse
 import xattr
+import FoundationPlist
+import Foundation
+import AppKit
+import datetime
+import commands
 from xml.dom import minidom
 from xml.parsers.expat import ExpatError
 
+try:
+    script_path = os.path.dirname(os.path.realpath(__file__))
+    print script_path
+    n = Nibbler(os.path.join(script_path, 'installinstall.nib'))
+except IOError, ImportError:
+    print "Unable to load nib!"
+    exit(20)
+Quiting = False
 
 DEFAULT_SUCATALOGS = {
     '17': 'https://swscan.apple.com/content/catalogs/others/'
@@ -400,6 +413,16 @@ def find_installer_app(mountpoint):
             return os.path.join(applications_dir, item)
     return None
 
+def list_values(list,list_values):
+    n.views[list].removeAllItems()
+    n.views[list].addItemsWithTitles_(list_values)
+
+def quitgui():
+    '''
+    Quit GUI and Script
+    '''
+    n.quit()
+    sys.exit()
 
 def main():
     '''Do the main thing here'''
@@ -462,18 +485,25 @@ def main():
             'No macOS installer products found in the sucatalog.')
         exit(-1)
 
+    installer_list = []
     # display a menu of choices (some seed catalogs have multiple installers)
-    print '%2s %12s %10s %8s %11s  %s' % ('#', 'ProductID', 'Version',
-                                          'Build', 'Post Date', 'Title')
+    # installer_list.append('%2s %12s %10s %8s %11s  %s' % ('#', 'ProductID', 'Version', 'Build', 'Post Date', 'Title'))
     for index, product_id in enumerate(product_info):
-        print '%2s %12s %10s %8s %11s  %s' % (
-            index + 1,
-            product_id,
+        installer_list.append('%s %s %s %s %s' % (
             product_info[product_id]['version'],
             product_info[product_id]['BUILD'],
             product_info[product_id]['PostDate'].strftime('%Y-%m-%d'),
-            product_info[product_id]['title']
-        )
+            product_info[product_id]['title'],
+            product_id
+        ))
+    
+    list_values('installer-select', installer_list)
+
+    n.attach(get_default_catalog, 'install')
+    n.attach(quitgui, 'cancel')
+
+    n.hidden = True
+    n.run()
 
     answer = raw_input(
         '\nChoose a product to download (1-%s): ' % len(product_info))
