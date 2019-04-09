@@ -39,15 +39,7 @@ import datetime
 import commands
 from xml.dom import minidom
 from xml.parsers.expat import ExpatError
-
-try:
-    script_path = os.path.dirname(os.path.realpath(__file__))
-    print script_path
-    n = Nibbler(os.path.join(script_path, 'installinstall.nib'))
-except IOError, ImportError:
-    print "Unable to load nib!"
-    exit(20)
-Quiting = False
+from AppKit import NSOpenPanel
 
 DEFAULT_SUCATALOGS = {
     '17': 'https://swscan.apple.com/content/catalogs/others/'
@@ -58,12 +50,14 @@ DEFAULT_SUCATALOGS = {
           '-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog',
 }
 
-
 SEED_CATALOGS_PLIST = (
     '/System/Library/PrivateFrameworks/Seeding.framework/Versions/Current/'
     'Resources/SeedCatalogs.plist'
 )
 
+def script_path():
+    path = os.path.dirname(os.path.realpath(__file__))
+    return path
 
 def get_seeding_program(sucatalog_url):
     '''Returns a seeding program name based on the sucatalog_url'''
@@ -75,7 +69,6 @@ def get_seeding_program(sucatalog_url):
         return ''
     except (OSError, ExpatError, AttributeError, KeyError):
         return ''
-
 
 def get_seed_catalog(seedname='DeveloperSeed'):
     '''Returns the developer seed sucatalog'''
@@ -100,7 +93,6 @@ def get_default_catalog():
     darwin_major = os.uname()[2].split('.')[0]
     return DEFAULT_SUCATALOGS.get(darwin_major)
 
-
 def make_sparse_image(volume_name, output_path):
     '''Make a sparse disk image we can install a product to'''
     cmd = ['/usr/bin/hdiutil', 'create', '-size', '8g', '-fs', 'HFS+',
@@ -120,7 +112,6 @@ def make_sparse_image(volume_name, output_path):
         print >> sys.stderr, err
         exit(-1)
 
-
 def make_compressed_dmg(app_path, diskimagepath):
     """Returns path to newly-created compressed r/o disk image containing
     Install macOS.app"""
@@ -135,7 +126,6 @@ def make_compressed_dmg(app_path, diskimagepath):
         print >> sys.stderr, err
     else:
         print 'Disk image created at: %s' % diskimagepath
-
 
 def mountdmg(dmgpath):
     """
@@ -159,7 +149,6 @@ def mountdmg(dmgpath):
                 mountpoints.append(entity['mount-point'])
 
     return mountpoints[0]
-
 
 def unmountdmg(mountpoint):
     """
@@ -194,7 +183,6 @@ def install_product(dist_path, target_vol):
 class ReplicationError(Exception):
     '''A custom error when replication fails'''
     pass
-
 
 def replicate_url(full_url,
                   root_dir='/tmp',
@@ -413,6 +401,20 @@ def find_installer_app(mountpoint):
             return os.path.join(applications_dir, item)
     return None
 
+def open_button():
+    panel = NSOpenPanel.openPanel()
+    panel.setCanCreateDirectories_(True)
+    panel.setCanChooseDirectories_(True)
+    panel.setCanChooseFiles_(False)  
+    def openPanelDidClose_(result):
+        if result:
+            panel.orderOut_(n)
+            # do something with the file(s) selected from the modal here
+            selected_file = panel.filenames()[0]
+            n.attach(n.views['destination'].setStringValue_(selected_file),'destination')
+    panel.beginSheetModalForWindow_completionHandler_(n.win, 
+            openPanelDidClose_)
+
 def list_values(list,list_values):
     n.views[list].removeAllItems()
     n.views[list].addItemsWithTitles_(list_values)
@@ -496,11 +498,12 @@ def main():
             product_info[product_id]['title'],
             product_id
         ))
-    
+    installer_list.sort()
     list_values('installer-select', installer_list)
-
+    n.attach(n.views['destination'].setStringValue_(script_path()),'destination')
     n.attach(get_default_catalog, 'install')
     n.attach(quitgui, 'cancel')
+    n.attach(open_button, 'open')
 
     n.hidden = True
     n.run()
@@ -567,4 +570,9 @@ def main():
 
 
 if __name__ == '__main__':
+    try:
+        n = Nibbler(os.path.join(script_path(), 'installinstall.nib'))
+    except IOError:
+        print "Unable to load nib!"
+        exit(20)
     main()
